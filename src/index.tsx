@@ -50,6 +50,11 @@ type OperationResult = {
   details: Record<string, unknown>;
 };
 
+type GameOption = {
+  data: string;
+  label: string;
+};
+
 const getStatus = callable<[], StatusResponse>("get_status");
 const listGames = callable<[], GameListResponse>("list_games");
 const stageGame = callable<[appid: string, dry_run: boolean], OperationResult>("stage_game");
@@ -81,6 +86,18 @@ function Content() {
     () => games.find((game) => game.appid === selectedAppId),
     [games, selectedAppId],
   );
+  const gameOptions = useMemo<GameOption[]>(
+    () =>
+      games.map((game) => ({
+        data: game.appid,
+        label: `${game.name} (${formatBytes(game.size_on_disk)})`,
+      })),
+    [games],
+  );
+  const selectedOption = useMemo(
+    () => gameOptions.find((option) => option.data === selectedAppId),
+    [gameOptions, selectedAppId],
+  );
 
   const refresh = async () => {
     setBusy(true);
@@ -89,7 +106,11 @@ function Content() {
       setMemory(gameList.memory ?? status.memory);
       setGames(gameList.games);
       setActiveMove(status.active_move);
-      setSelectedAppId((current) => current ?? gameList.games[0]?.appid);
+      setSelectedAppId((current) =>
+        current && gameList.games.some((game) => game.appid === current)
+          ? current
+          : gameList.games[0]?.appid,
+      );
       setLastMessage(`Found ${gameList.games.length} eligible installed games.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -139,13 +160,15 @@ function Content() {
         <PanelSectionRow>
           <DropdownItem
             label="Installed game"
-            rgOptions={games.map((game) => ({
-              data: game.appid,
-              label: `${game.name} (${formatBytes(game.size_on_disk)})`,
-            }))}
-            selectedOption={selectedAppId}
+            rgOptions={gameOptions}
+            selectedOption={selectedOption}
             onChange={(option) => setSelectedAppId(String(option.data))}
           />
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <div className={staticClasses.PanelSectionRow}>
+            Selected: {selectedGame ? selectedGame.name : "None"}
+          </div>
         </PanelSectionRow>
         <PanelSectionRow>
           <ButtonItem layout="below" disabled={busy} onClick={refresh}>

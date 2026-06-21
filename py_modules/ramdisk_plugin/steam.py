@@ -11,6 +11,20 @@ STEAM_ROOT_CANDIDATES = (
     ".local/share/Steam",
 )
 
+EXCLUDED_APP_IDS = {
+    "228980",  # Steamworks Common Redistributables
+    "1391110",  # Steam Linux Runtime - Soldier
+    "1628350",  # Steam Linux Runtime - Sniper
+    "1887720",  # Proton Experimental
+    "2180100",  # Proton Hotfix
+}
+
+EXCLUDED_NAME_PREFIXES = (
+    "Proton ",
+    "Steam Linux Runtime",
+    "Steamworks Common Redistributables",
+)
+
 
 def _read_vdf(path: Path) -> dict[str, Any]:
     return loads(path.read_text(encoding="utf-8", errors="replace"))
@@ -42,11 +56,17 @@ def find_library_paths(home: str) -> list[Path]:
     unique: list[Path] = []
     seen: set[str] = set()
     for path in paths:
-        resolved = str(path.expanduser())
+        resolved = str(path.expanduser().resolve())
         if resolved not in seen:
             unique.append(path.expanduser())
             seen.add(resolved)
     return unique
+
+
+def _is_excluded_tool(appid: str, name: str) -> bool:
+    if appid in EXCLUDED_APP_IDS:
+        return True
+    return any(name.startswith(prefix) for prefix in EXCLUDED_NAME_PREFIXES)
 
 
 def _manifest_size(manifest: dict[str, Any], install_path: Path) -> int:
@@ -71,7 +91,7 @@ def directory_size(path: Path) -> int:
 
 
 def installed_games(home: str, max_size_bytes: int | None = None) -> list[SteamGame]:
-    games: list[SteamGame] = []
+    games_by_appid: dict[str, SteamGame] = {}
     for library in find_library_paths(home):
         steamapps = library / "steamapps"
         common = steamapps / "common"
@@ -81,19 +101,21 @@ def installed_games(home: str, max_size_bytes: int | None = None) -> list[SteamG
             manifest = _read_vdf(manifest_path).get("AppState", {})
             appid = str(manifest.get("appid", manifest_path.stem.removeprefix("appmanifest_")))
             name = str(manifest.get("name", f"App {appid}"))
+            if _is_excluded_tool(appid, name):
+                continue
             install_dir_name = str(manifest.get("installdir", ""))
             install_dir = common / install_dir_name
             size = _manifest_size(manifest, install_dir)
             if max_size_bytes is not None and size > max_size_bytes:
                 continue
-            games.append(
-                SteamGame(
-                    appid=appid,
-                    name=name,
-                    install_dir=str(install_dir),
-                    library_path=str(library),
-                    size_on_disk=size,
-                )
+            game = SteamGame(
+                appid=appid,
+                name=name,
+                install_dir=str(install_dir),
+                library_path=str(library),
+                size_on_disk=size,
             )
-    return sorted(games, key=lambda game: game.name.casefold())
-
+            existing = games_by_appid.get(appid)
+            if existing is None or game.size_on_disk > existing.size_on_disk:
+                games_by_appid[appid] = game
+    return sorted(games_by_appid.values(), key=lambda game: game.name.casefold())

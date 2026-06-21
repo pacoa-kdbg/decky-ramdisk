@@ -94,10 +94,13 @@ function Content() {
       })),
     [games],
   );
-  const selectedOption = useMemo(
-    () => gameOptions.find((option) => option.data === selectedAppId),
-    [gameOptions, selectedAppId],
-  );
+  const selectGame = (optionOrData: unknown) => {
+    if (typeof optionOrData === "object" && optionOrData !== null && "data" in optionOrData) {
+      setSelectedAppId(String(optionOrData.data));
+      return;
+    }
+    setSelectedAppId(String(optionOrData));
+  };
 
   const refresh = async () => {
     setBusy(true);
@@ -161,8 +164,8 @@ function Content() {
           <DropdownItem
             label="Installed game"
             rgOptions={gameOptions}
-            selectedOption={selectedOption}
-            onChange={(option) => setSelectedAppId(String(option.data))}
+            selectedOption={selectedAppId}
+            onChange={selectGame}
           />
         </PanelSectionRow>
         <PanelSectionRow>

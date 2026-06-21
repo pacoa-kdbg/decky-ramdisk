@@ -25,6 +25,10 @@ def _run(command: list[str], dry_run: bool) -> None:
     subprocess.run(command, check=True)
 
 
+def _is_mountpoint(path: Path) -> bool:
+    return subprocess.run(["mountpoint", "-q", str(path)], check=False).returncode == 0
+
+
 def plan_move(game: SteamGame, state: MoveStateStore) -> OperationResult:
     existing = state.read()
     if existing is not None:
@@ -64,6 +68,44 @@ def stage_game(game: SteamGame, state: MoveStateStore, dry_run: bool = True) -> 
     target = target_common / source.name
     manifest = Path(game.library_path) / "steamapps" / f"appmanifest_{game.appid}.acf"
     target_manifest = RAMDISK_LIBRARY / "steamapps" / manifest.name
+    move = ActiveMove(
+        appid=game.appid,
+        name=game.name,
+        original_library_path=game.library_path,
+        original_install_dir=game.install_dir,
+        ramdisk_library_path=str(RAMDISK_LIBRARY),
+        ramdisk_mount_path=str(RAMDISK_BASE),
+        size_on_disk=game.size_on_disk,
+    )
+
+    if not source.exists():
+        return OperationResult(
+            ok=False,
+            message=f"{game.name} install directory does not exist.",
+            kind="move",
+            details={"active_move": move.to_dict(), "source": str(source), "dry_run": dry_run},
+        )
+    if source.is_symlink():
+        return OperationResult(
+            ok=False,
+            message=f"{game.name} install directory is already a symlink.",
+            kind="move",
+            details={"active_move": move.to_dict(), "source": str(source), "dry_run": dry_run},
+        )
+    if not manifest.exists():
+        return OperationResult(
+            ok=False,
+            message=f"{game.name} Steam manifest was not found.",
+            kind="move",
+            details={"active_move": move.to_dict(), "manifest": str(manifest), "dry_run": dry_run},
+        )
+    if not dry_run and _is_mountpoint(RAMDISK_BASE):
+        return OperationResult(
+            ok=False,
+            message=f"{RAMDISK_BASE} is already mounted.",
+            kind="move",
+            details={"active_move": move.to_dict(), "mount_path": str(RAMDISK_BASE), "dry_run": dry_run},
+        )
 
     try:
         _run(["mkdir", "-p", str(target_common)], dry_run)
@@ -72,19 +114,9 @@ def stage_game(game: SteamGame, state: MoveStateStore, dry_run: bool = True) -> 
             target_common.mkdir(parents=True, exist_ok=True)
             shutil.copytree(source, target, symlinks=True)
             shutil.copy2(manifest, target_manifest)
+            state.write(move)
             shutil.rmtree(source)
             os.symlink(target, source)
-        move = ActiveMove(
-            appid=game.appid,
-            name=game.name,
-            original_library_path=game.library_path,
-            original_install_dir=game.install_dir,
-            ramdisk_library_path=str(RAMDISK_LIBRARY),
-            ramdisk_mount_path=str(RAMDISK_BASE),
-            size_on_disk=game.size_on_disk,
-        )
-        if not dry_run:
-            state.write(move)
         return OperationResult(
             ok=True,
             message="Dry-run move plan created." if dry_run else f"{game.name} staged on RAM disk.",
@@ -109,6 +141,13 @@ def revert_active_move(state: MoveStateStore, dry_run: bool = True) -> Operation
 
     source = Path(move.original_install_dir)
     ram_source = Path(move.ramdisk_mount_path) / "SteamLibrary" / "steamapps" / "common" / source.name
+    if not dry_run and not ram_source.exists():
+        return OperationResult(
+            ok=False,
+            message=f"RAM-disk copy for {move.name} was not found.",
+            kind="revert",
+            details={"active_move": move.to_dict(), "ram_source": str(ram_source), "dry_run": dry_run},
+        )
     try:
         if not dry_run:
             if source.is_symlink():

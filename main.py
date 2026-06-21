@@ -42,20 +42,30 @@ class Plugin:
             memory = read_memory_info()
             matches = [game for game in installed_games(_user_home(), memory.max_game_bytes) if game.appid == str(appid)]
             if not matches:
+                decky.logger.warning(f"Stage request rejected: appid={appid} dry_run={dry_run} was not eligible")
                 return {
                     "ok": False,
                     "message": "Game was not found or is larger than the RAM-disk size limit.",
                     "kind": "move",
                     "details": {"appid": appid},
                 }
-            return stage_game(matches[0], MoveStateStore(_settings_dir()), dry_run=dry_run).to_dict()
+            game = matches[0]
+            decky.logger.info(
+                f"Stage request: appid={game.appid} name={game.name!r} size={game.size_on_disk} dry_run={dry_run}"
+            )
+            result = stage_game(game, MoveStateStore(_settings_dir()), dry_run=dry_run)
+            decky.logger.info(f"Stage result: ok={result.ok} kind={result.kind} message={result.message!r}")
+            return result.to_dict()
         except OperationError as exc:
             decky.logger.error(traceback.format_exc())
             return {"ok": False, "message": str(exc), "kind": "error", "details": {}}
 
     async def revert(self, dry_run: bool = True):
         try:
-            return revert_active_move(MoveStateStore(_settings_dir()), dry_run=dry_run).to_dict()
+            decky.logger.info(f"Revert request: dry_run={dry_run}")
+            result = revert_active_move(MoveStateStore(_settings_dir()), dry_run=dry_run)
+            decky.logger.info(f"Revert result: ok={result.ok} kind={result.kind} message={result.message!r}")
+            return result.to_dict()
         except OperationError as exc:
             decky.logger.error(traceback.format_exc())
             return {"ok": False, "message": str(exc), "kind": "error", "details": {}}

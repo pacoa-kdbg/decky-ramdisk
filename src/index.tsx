@@ -51,7 +51,7 @@ type OperationResult = {
 };
 
 type GameOption = {
-  data: string;
+  data: number;
   label: string;
 };
 
@@ -78,28 +78,29 @@ function Content() {
   const [memory, setMemory] = useState<MemoryInfo | null>(null);
   const [games, setGames] = useState<SteamGame[]>([]);
   const [activeMove, setActiveMove] = useState<ActiveMove | null>(null);
-  const [selectedAppId, setSelectedAppId] = useState<string | undefined>();
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [lastMessage, setLastMessage] = useState<string>("Ready.");
 
-  const selectedGame = useMemo(
-    () => games.find((game) => game.appid === selectedAppId),
-    [games, selectedAppId],
-  );
+  const selectedGame = games[selectedIndex];
   const gameOptions = useMemo<GameOption[]>(
     () =>
-      games.map((game) => ({
-        data: game.appid,
+      games.map((game, index) => ({
+        data: index,
         label: `${game.name} (${formatBytes(game.size_on_disk)})`,
       })),
     [games],
   );
   const selectGame = (optionOrData: unknown) => {
+    let nextIndex: number;
     if (typeof optionOrData === "object" && optionOrData !== null && "data" in optionOrData) {
-      setSelectedAppId(String(optionOrData.data));
-      return;
+      nextIndex = Number(optionOrData.data);
+    } else {
+      nextIndex = Number(optionOrData);
     }
-    setSelectedAppId(String(optionOrData));
+    if (Number.isInteger(nextIndex) && nextIndex >= 0 && nextIndex < games.length) {
+      setSelectedIndex(nextIndex);
+    }
   };
 
   const refresh = async () => {
@@ -109,11 +110,7 @@ function Content() {
       setMemory(gameList.memory ?? status.memory);
       setGames(gameList.games);
       setActiveMove(status.active_move);
-      setSelectedAppId((current) =>
-        current && gameList.games.some((game) => game.appid === current)
-          ? current
-          : gameList.games[0]?.appid,
-      );
+      setSelectedIndex((current) => (current < gameList.games.length ? current : 0));
       setLastMessage(`Found ${gameList.games.length} eligible installed games.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -164,13 +161,13 @@ function Content() {
           <DropdownItem
             label="Installed game"
             rgOptions={gameOptions}
-            selectedOption={selectedAppId}
+            selectedOption={selectedIndex}
             onChange={selectGame}
           />
         </PanelSectionRow>
         <PanelSectionRow>
           <div className={staticClasses.PanelSectionRow}>
-            Selected: {selectedGame ? selectedGame.name : "None"}
+            Selected: {selectedGame ? `${selectedGame.name} (${selectedGame.appid})` : "None"}
           </div>
         </PanelSectionRow>
         <PanelSectionRow>

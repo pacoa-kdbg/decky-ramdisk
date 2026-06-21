@@ -1,6 +1,5 @@
 import {
   ButtonItem,
-  DropdownItem,
   PanelSection,
   PanelSectionRow,
   staticClasses,
@@ -50,11 +49,6 @@ type OperationResult = {
   details: Record<string, unknown>;
 };
 
-type GameOption = {
-  data: number;
-  label: string;
-};
-
 const getStatus = callable<[], StatusResponse>("get_status");
 const listGames = callable<[], GameListResponse>("list_games");
 const stageGame = callable<[appid: string, dry_run: boolean], OperationResult>("stage_game");
@@ -83,24 +77,20 @@ function Content() {
   const [lastMessage, setLastMessage] = useState<string>("Ready.");
 
   const selectedGame = games[selectedIndex];
-  const gameOptions = useMemo<GameOption[]>(
-    () =>
-      games.map((game, index) => ({
-        data: index,
-        label: `${game.name} (${formatBytes(game.size_on_disk)})`,
-      })),
-    [games],
-  );
-  const selectGame = (optionOrData: unknown) => {
-    let nextIndex: number;
-    if (typeof optionOrData === "object" && optionOrData !== null && "data" in optionOrData) {
-      nextIndex = Number(optionOrData.data);
-    } else {
-      nextIndex = Number(optionOrData);
+  const selectedLabel = useMemo(() => {
+    if (!selectedGame) {
+      return "None";
     }
-    if (Number.isInteger(nextIndex) && nextIndex >= 0 && nextIndex < games.length) {
-      setSelectedIndex(nextIndex);
-    }
+    return `${selectedGame.name} (${formatBytes(selectedGame.size_on_disk)})`;
+  }, [selectedGame]);
+
+  const moveSelection = (direction: -1 | 1) => {
+    setSelectedIndex((current) => {
+      if (games.length === 0) {
+        return 0;
+      }
+      return (current + direction + games.length) % games.length;
+    });
   };
 
   const refresh = async () => {
@@ -158,17 +148,33 @@ function Content() {
 
       <PanelSection title="Game">
         <PanelSectionRow>
-          <DropdownItem
-            label="Installed game"
-            rgOptions={gameOptions}
-            selectedOption={selectedIndex}
-            onChange={selectGame}
-          />
+          <div className={staticClasses.PanelSectionRow}>
+            Selected: {selectedLabel}
+            {selectedGame ? (
+              <>
+                <br />
+                App ID: {selectedGame.appid}
+              </>
+            ) : null}
+          </div>
         </PanelSectionRow>
         <PanelSectionRow>
-          <div className={staticClasses.PanelSectionRow}>
-            Selected: {selectedGame ? `${selectedGame.name} (${selectedGame.appid})` : "None"}
-          </div>
+          <ButtonItem
+            layout="below"
+            disabled={busy || games.length < 2}
+            onClick={() => moveSelection(-1)}
+          >
+            Previous Game
+          </ButtonItem>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            disabled={busy || games.length < 2}
+            onClick={() => moveSelection(1)}
+          >
+            Next Game
+          </ButtonItem>
         </PanelSectionRow>
         <PanelSectionRow>
           <ButtonItem layout="below" disabled={busy} onClick={refresh}>

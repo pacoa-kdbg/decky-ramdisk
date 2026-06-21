@@ -1,0 +1,11 @@
+{
+  "name": "Decky RAMDisk",
+  "author": "TBD",
+  "flags": ["debug", "root"],
+  "api_version": 1,
+  "publish": {
+    "tags": ["storage", "performance", "steam-library"],
+    "description": "Move a selected Steam game onto a temporary RAM disk and restore it later.",
+    "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/decky-plugin-template"
+  }
+}

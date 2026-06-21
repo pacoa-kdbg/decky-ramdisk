@@ -1,7 +1,7 @@
 {
   "name": "Decky RAMDisk",
   "author": "TBD",
-  "flags": ["debug", "root"],
+  "flags": ["debug", "_root"],
   "api_version": 1,
   "publish": {
     "tags": ["storage", "performance", "steam-library"],

@@ -47,19 +47,34 @@ Decky RAMDisk should make it easy to temporarily run a small installed Steam gam
 ## First Technical Decisions
 
 - Support one active RAM-disk game at a time.
-- Use `tmpfs` mounted at `/run/media/decky-ramdisk`.
+- Use `tmpfs` mounted at `/run/media/decky-ramdisk` as a container for
+  the overlayfs lower/upper/work directories.
+- Stage with **overlayfs** layered on top of the original install path so
+  the original directory is never deleted or modified by the plugin.
 - Use `/run` rather than `/home/deck` so the mount is clearly runtime-scoped.
-- Persist only restore metadata, not cache data.
+- Persist restore metadata atomically (tmp + fsync + rename) with explicit
+  phase tracking (`staging` -> `active` -> `reverting`).
 - Require preview/dry-run support from the first implementation.
+- Run a recovery pass on plugin load to heal stale state after a reboot
+  or a crashed stage/revert.
 
 ## Open Design Questions
 
-- Should the plugin truly move the game, or copy to RAM and leave the original intact with Steam redirected through symlinks?
 - Should Steam be asked to add the RAM disk as a library folder through UI/API behavior, or should `libraryfolders.vdf` be edited while Steam is stopped?
 - How should shader caches and compatdata be handled for Proton games?
 - What amount of RAM headroom should be reserved beyond the game's `SizeOnDisk`?
 - Should the plugin reject games with workshop/mod content by default?
-- What recovery flow should run if Decky starts and finds saved state but the RAM disk is gone after reboot?
+
+## Resolved Design Decisions
+
+- **Move vs symlink:** the plugin does neither. It overlays a tmpfs on
+  top of the original install path. The original is preserved as the
+  lower layer's source of truth; writes during play land on the tmpfs
+  upper layer. Revert chooses whether to keep them.
+- **Reboot recovery:** because the original install is never destroyed,
+  startup recovery can clear stale state without any data restoration.
+  The recovery pass is in `operations.recover` and runs from
+  `Plugin._main`.
 
 ## Safety Requirements Before Real Use
 

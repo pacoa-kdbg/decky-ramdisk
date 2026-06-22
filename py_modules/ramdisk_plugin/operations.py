@@ -29,6 +29,10 @@ def _is_mountpoint(path: Path) -> bool:
     return subprocess.run(["mountpoint", "-q", str(path)], check=False).returncode == 0
 
 
+def _chown_recursive(path: Path, uid: int, gid: int, dry_run: bool) -> None:
+    _run(["chown", "-R", f"{uid}:{gid}", str(path)], dry_run)
+
+
 def plan_move(game: SteamGame, state: MoveStateStore) -> OperationResult:
     existing = state.read()
     if existing is not None:
@@ -108,12 +112,25 @@ def stage_game(game: SteamGame, state: MoveStateStore, dry_run: bool = True) -> 
         )
 
     try:
-        _run(["mkdir", "-p", str(target_common)], dry_run)
-        _run(["mount", "-t", "tmpfs", "-o", f"size={game.size_on_disk + 1024**3}", "tmpfs", str(RAMDISK_BASE)], dry_run)
+        source_stat = source.stat()
+        _run(["mkdir", "-p", str(RAMDISK_BASE)], dry_run)
+        _run(
+            [
+                "mount",
+                "-t",
+                "tmpfs",
+                "-o",
+                f"size={game.size_on_disk + 1024**3},uid={source_stat.st_uid},gid={source_stat.st_gid},mode=0755",
+                "tmpfs",
+                str(RAMDISK_BASE),
+            ],
+            dry_run,
+        )
         if not dry_run:
             target_common.mkdir(parents=True, exist_ok=True)
             shutil.copytree(source, target, symlinks=True)
             shutil.copy2(manifest, target_manifest)
+            _chown_recursive(RAMDISK_LIBRARY, source_stat.st_uid, source_stat.st_gid, dry_run=False)
             state.write(move)
             shutil.rmtree(source)
             os.symlink(target, source)
@@ -150,9 +167,11 @@ def revert_active_move(state: MoveStateStore, dry_run: bool = True) -> Operation
         )
     try:
         if not dry_run:
+            source_parent_stat = source.parent.stat()
             if source.is_symlink():
                 source.unlink()
             shutil.copytree(ram_source, source, symlinks=True)
+            _chown_recursive(source, source_parent_stat.st_uid, source_parent_stat.st_gid, dry_run=False)
             _run(["umount", move.ramdisk_mount_path], dry_run=False)
             state.clear()
         return OperationResult(

@@ -11,9 +11,9 @@ The intended flow:
 5. Move or stage the selected game onto the RAM disk.
 6. Persist enough state to restore the game to its original library with one button.
 
-This repository is currently a scaffold and design spike. The backend includes parsers and operation planning, but destructive filesystem behavior needs Steam Deck testing before any store submission.
+This repository is currently a scaffold and design spike. The backend includes parsers and real move/restore operations, but destructive filesystem behavior needs more Steam Deck testing before any store submission.
 
-Real move/restore operations are feature-gated behind `DECKY_RAMDISK_ENABLE_MUTATIONS=1` while the operation sequence is being validated. Dry-run preview remains available without that flag.
+Real move/restore operations are enabled by default. Set `DECKY_RAMDISK_ENABLE_MUTATIONS=0` for development sessions where the UI should only allow dry-run previews.
 
 ## Current Structure
 

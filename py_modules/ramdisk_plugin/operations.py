@@ -16,7 +16,7 @@ class OperationError(RuntimeError):
 
 
 def mutations_enabled() -> bool:
-    return os.environ.get("DECKY_RAMDISK_ENABLE_MUTATIONS") == "1"
+    return os.environ.get("DECKY_RAMDISK_ENABLE_MUTATIONS", "1") != "0"
 
 
 def _run(command: list[str], dry_run: bool) -> None:
@@ -58,7 +58,7 @@ def stage_game(game: SteamGame, state: MoveStateStore, dry_run: bool = True) -> 
     if not dry_run and not mutations_enabled():
         return OperationResult(
             ok=False,
-            message="Real moves are disabled until DECKY_RAMDISK_ENABLE_MUTATIONS=1 is set for development testing.",
+            message="Real moves are disabled because DECKY_RAMDISK_ENABLE_MUTATIONS=0 is set.",
             kind="move",
             details={"dry_run": dry_run},
         )
@@ -134,7 +134,7 @@ def revert_active_move(state: MoveStateStore, dry_run: bool = True) -> Operation
     if not dry_run and not mutations_enabled():
         return OperationResult(
             ok=False,
-            message="Real restores are disabled until DECKY_RAMDISK_ENABLE_MUTATIONS=1 is set for development testing.",
+            message="Real restores are disabled because DECKY_RAMDISK_ENABLE_MUTATIONS=0 is set.",
             kind="revert",
             details={"dry_run": dry_run, "active_move": move.to_dict()},
         )
